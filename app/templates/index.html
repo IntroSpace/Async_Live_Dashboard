@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Крипто-дашборд</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .price-up { color: #22c55e; /* green-500 */ }
+        .price-down { color: #ef4444; /* red-500 */ }
+        .price-flash {
+            animation: flash 1s ease-out;
+        }
+        @keyframes flash {
+            0% { background-color: #374151; /* gray-700 */ }
+            50% { background-color: #1e293b; /* gray-800 */ }
+            100% { background-color: #374151; /* gray-700 */ }
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-white font-sans">
+
+    <div class="container mx-auto p-4 md:p-8">
+        <header class="text-center mb-8">
+            <h1 class="text-4xl md:text-5xl font-bold text-cyan-400">Крипто-дашборд</h1>
+            <p id="status" class="text-gray-400 mt-2">Подключение...</p>
+        </header>
+
+        <main id="crypto-container" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            <!-- Карточки будут созданы здесь -->
+        </main>
+    </div>
+
+    <script>
+        const statusEl = document.getElementById('status');
+        const container = document.getElementById('crypto-container');
+        const coinMetadata = {
+            'bitcoin': { name: 'Bitcoin', symbol: 'BTC', icon: 'https://assets.coingecko.com/coins/images/1/large/bitcoin.png' },
+            'ethereum': { name: 'Ethereum', symbol: 'ETH', icon: 'https://assets.coingecko.com/coins/images/279/large/ethereum.png' },
+            'solana': { name: 'Solana', symbol: 'SOL', icon: 'https://assets.coingecko.com/coins/images/4128/large/solana.png' }
+        };
+        let lastPrices = {};
+
+        function connect() {
+            const socket = new WebSocket('ws://localhost:8888');
+
+            socket.onopen = () => {
+                console.log('WebSocket соединение установлено.');
+                statusEl.textContent = 'В реальном времени';
+                statusEl.classList.add('text-green-400');
+            };
+
+            socket.onmessage = (event) => {
+                // `event.data` - это данные, пришедшие от сервера (в формате JSON-строки).
+                const data = JSON.parse(event.data);
+                console.log('Получены данные:', data);
+                updateUI(data);
+            };
+
+            socket.onclose = (event) => {
+                console.log('WebSocket соединение закрыто. Попытка переподключения через 3 секунды.');
+                statusEl.textContent = 'Соединение потеряно. Переподключение...';
+                statusEl.classList.remove('text-green-400');
+                setTimeout(connect, 3000); // Пытаемся переподключиться
+            };
+
+            socket.onerror = (error) => {
+                console.error('WebSocket ошибка:', error);
+                socket.close();
+            };
+        }
+
+        function updateUI(data) {
+            for (const id in data) {
+                const coinData = data[id];
+                const meta = coinMetadata[id];
+                if (!meta) continue;
+
+                let card = document.getElementById(id);
+                if (!card) {
+                    // Если карточки еще нет, создаем ее
+                    card = document.createElement('div');
+                    card.id = id;
+                    card.className = "bg-gray-800 p-6 rounded-lg shadow-lg border border-gray-700 transition-all hover:shadow-cyan-500/20 hover:border-cyan-500";
+                    container.appendChild(card);
+                }
+
+                const price = coinData.usd;
+                const change = coinData.usd_24h_change;
+
+                let priceClass = '';
+                if (lastPrices[id] && price > lastPrices[id]) {
+                    priceClass = 'price-up';
+                } else if (lastPrices[id] && price < lastPrices[id]) {
+                    priceClass = 'price-down';
+                }
+
+                card.innerHTML = `
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center">
+                            <img src="${meta.icon}" alt="${meta.symbol}" class="w-10 h-10 mr-4 rounded-full">
+                            <div>
+                                <h2 class="text-2xl font-bold">${meta.name}</h2>
+                                <p class="text-gray-500">${meta.symbol}</p>
+                            </div>
+                        </div>
+                        <div class="text-right">
+                            <p class="text-2xl font-semibold ${priceClass}" id="price-${id}">$${price.toLocaleString('en-US')}</p>
+                            <p class="text-sm ${change >= 0 ? 'text-green-500' : 'text-red-500'}">
+                                ${change >= 0 ? '+' : ''}${change.toFixed(2)}%
+                            </p>
+                        </div>
+                    </div>
+                `;
+
+                // Добавляем эффект вспышки при обновлении
+                const priceEl = document.getElementById(`price-${id}`);
+                priceEl.classList.add('price-flash');
+                setTimeout(() => priceEl.classList.remove('price-flash'), 1000);
+
+                lastPrices[id] = price;
+            }
+        }
+
+        // Начинаем подключение
+        connect();
+    </script>
+
+</body>
+</html>

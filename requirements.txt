@@ -1,0 +1,5 @@
+flask
+motor
+aiohttp
+python-dotenv
+websockets
